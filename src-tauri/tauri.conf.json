@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "APK Disguise Pro",
+  "version": "1.0.0",
+  "identifier": "com.wuhao.apk-disguise-pro",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "APK Disguise Pro - APK 伪装工具",
+        "width": 1100,
+        "height": 750,
+        "resizable": true,
+        "center": true,
+        "decorations": true,
+        "transparent": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": [
+      "resources/tools/*"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "shortDescription": "APK包名伪装工具，绕过工业设备安装限制",
+    "longDescription": "专为 Newland MT90 等工业级 Android 设备设计的 APK 改包名工具。通过修改包名前缀绕过系统白名单限制，实现第三方应用的安装。",
+    "category": "DeveloperTool",
+    "copyright": "© 2026 wuhao"
+  }
+}
