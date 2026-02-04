@@ -1,0 +1,155 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # 仅在推送 v* 格式的 tag 时触发
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            name: macOS-arm64
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            name: macOS-x64
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: Windows-x64
+
+    runs-on: ${{ matrix.platform }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Setup Java (for building tools)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # ========== 下载并内置工具 ==========
+      - name: Download Apktool
+        run: |
+          mkdir -p src-tauri/resources/tools
+          curl -L -o src-tauri/resources/tools/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar
+          
+      - name: Download Android Build Tools (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # 下载 Android SDK Command Line Tools
+          curl -L -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip
+          unzip -q cmdline-tools.zip -d android-sdk
+          mkdir -p android-sdk/cmdline-tools/latest
+          mv android-sdk/cmdline-tools/* android-sdk/cmdline-tools/latest/ 2>/dev/null || true
+          
+          # 安装 build-tools
+          yes | android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=android-sdk "build-tools;34.0.0" || true
+          
+          # 复制工具到资源目录
+          cp android-sdk/build-tools/34.0.0/zipalign src-tauri/resources/tools/
+          cp android-sdk/build-tools/34.0.0/lib/apksigner.jar src-tauri/resources/tools/
+          chmod +x src-tauri/resources/tools/zipalign
+
+      - name: Download Android Build Tools (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # 下载 Android SDK Command Line Tools
+          Invoke-WebRequest -Uri "https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip" -OutFile "cmdline-tools.zip"
+          Expand-Archive -Path "cmdline-tools.zip" -DestinationPath "android-sdk"
+          
+          # 创建目录结构
+          New-Item -ItemType Directory -Force -Path "android-sdk/cmdline-tools/latest"
+          Move-Item -Path "android-sdk/cmdline-tools/*" -Destination "android-sdk/cmdline-tools/latest/" -ErrorAction SilentlyContinue
+          
+          # 安装 build-tools
+          echo "y" | android-sdk/cmdline-tools/latest/bin/sdkmanager.bat --sdk_root=android-sdk "build-tools;34.0.0"
+          
+          # 复制工具到资源目录
+          Copy-Item "android-sdk/build-tools/34.0.0/zipalign.exe" -Destination "src-tauri/resources/tools/"
+          Copy-Item "android-sdk/build-tools/34.0.0/lib/apksigner.jar" -Destination "src-tauri/resources/tools/"
+
+      - name: Generate Keystore
+        run: |
+          keytool -genkeypair -v -keystore src-tauri/resources/tools/release-key.jks \
+            -keyalg RSA -keysize 2048 -validity 36500 \
+            -alias release-alias \
+            -storepass apkdisguise123 \
+            -keypass apkdisguise123 \
+            -dname "CN=APK Disguise Pro, OU=Dev, O=APK Disguise, L=Unknown, ST=Unknown, C=CN"
+
+      - name: List resources
+        run: ls -la src-tauri/resources/tools/ || dir src-tauri/resources/tools/
+
+      # ========== 构建 Tauri ==========
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Tauri (macOS)
+        if: runner.os == 'macOS'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'APK Disguise Pro ${{ github.ref_name }}'
+          releaseBody: |
+            ## APK Disguise Pro ${{ github.ref_name }}
+            
+            一键修改 APK 包名，绕过设备安装限制。
+            
+            ### 下载说明
+            - **macOS (Apple Silicon)**: `APK-Disguise-Pro_*_aarch64.dmg`
+            - **macOS (Intel)**: `APK-Disguise-Pro_*_x64.dmg`
+            - **Windows**: `APK-Disguise-Pro_*_x64-setup.exe`
+            
+            ### 内置工具
+            本版本已内置以下工具，无需额外安装：
+            - Apktool 2.9.3
+            - Android Build Tools (zipalign, apksigner)
+            - 签名密钥
+            
+            ### 使用前提
+            - 需要安装 Java JDK 11+
+            - 需要安装 ADB 并连接设备
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.target }}
+
+      - name: Build Tauri (Windows)
+        if: runner.os == 'Windows'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'APK Disguise Pro ${{ github.ref_name }}'
+          releaseBody: |
+            ## APK Disguise Pro ${{ github.ref_name }}
+            
+            一键修改 APK 包名，绕过设备安装限制。
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.target }}
