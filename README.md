@@ -87,13 +87,18 @@ npm install
 # 需手动下载 apktool.jar, zipalign, apksigner.jar 等放置到 src-tauri/resources/tools/
 # 或参考 .github/workflows/release.yml 中的下载脚本
 
-# 4. 启动开发环境
-npm run tauri dev
+
+# 1. 提交所有更改
+git add .
+git commit -m "feat: 准备发布新版本"
+
+# 2. 打上 Tag 并推送：
+git tag v2.0.0
+git push origin v2.0.0
 ```
 
+
 #### 构建发布包
-```bash
-npm run tauri build
 ```
 构建产物将位于 `src-tauri/target/release/bundle/`。
 
