@@ -97,6 +97,14 @@ git tag v2.0.0
 git push origin v2.0.0
 ```
 
+##### 回退版本
+```bash
+git push origin :refs/tags/v2.0.0  # 删除远程 tag (如果已经存在)
+git tag -d v2.0.0                 # 删除本地 tag
+git tag v2.0.0                    # 重新打 tag
+git push origin v2.0.0            # 推送 tag 触发构建
+```
+
 
 #### 构建发布包
 ```
